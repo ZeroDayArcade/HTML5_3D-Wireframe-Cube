@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html> 
+    <head>
+        <title>3D Cube</title>
+    </head>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        #screen {
+            background: black;
+            position: relative;
+            display: block;
+            margin:100px auto;
+        }
+    </style>
+
+    <body>
+        <svg id="screen" height="480" width="816"></svg>
+    </body>
+</html>
+
+<script>
+    function vec3d(x, y, z, w=1) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w;
+    }
+
+    function triangle(corner_a, corner_b, corner_c) {
+        this.p = [
+            corner_a,             // vec3d instance
+            corner_b,
+            corner_c
+        ]
+    }
+
+    function mesh(array_of_triangles) {
+        this.tris = array_of_triangles
+    }
+
+    function mat4x4(m=undefined) {
+        if (m==undefined) {
+            this.m = [
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+            ]
+        } else {
+            this.m = m
+        }
+    }
+
+    function MultiplyMatrixVector(m, i) {
+        let o = new vec3d(0, 0, 0)
+        o.x = i.x * m.m[0][0] + i.y * m.m[1][0] + i.z * m.m[2][0] + i.w * m.m[3][0];
+        o.y = i.x * m.m[0][1] + i.y * m.m[1][1] + i.z * m.m[2][1] + i.w * m.m[3][1];
+        o.z = i.x * m.m[0][2] + i.y * m.m[1][2] + i.z * m.m[2][2] + i.w * m.m[3][2];
+        o.w = i.x * m.m[0][3] + i.y * m.m[1][3] + i.z * m.m[2][3] + i.w * m.m[3][3];
+        return o;
+    }
+
+    function DrawTriangle(x1, y1, x2, y2, x3, y3) {
+        document.getElementById("screen").innerHTML += 
+            `<polygon points="${x1},${y1} ${x2},${y2} ${x3},${y3}" style="fill:transparent;stroke:#4BB543;stroke-width:1" />`
+    }
+
+    // 3D Cube Mesh
+    let meshCube = new mesh([
+
+		// SOUTH
+		new triangle(new vec3d(0, 0, 0),    new vec3d(0, 1, 0),    new vec3d(1, 1, 0)),
+		new triangle(new vec3d(0, 0, 0),    new vec3d(1, 1, 0),    new vec3d(1, 0, 0)),
+
+		// EAST                                                      
+		new triangle(new vec3d(1, 0, 0),    new vec3d(1, 1, 0),    new vec3d(1, 1, 1)),
+		new triangle(new vec3d(1, 0, 0),    new vec3d(1, 1, 1),    new vec3d(1, 0, 1)),
+
+		// NORTH                                                     
+		new triangle(new vec3d(1, 0, 1),    new vec3d(1, 1, 1),    new vec3d(0, 1, 1)),
+		new triangle(new vec3d(1, 0, 1),    new vec3d(0, 1, 1),    new vec3d(0, 0, 1)),
+
+		// // WEST                                                      
+		new triangle(new vec3d(0, 0, 1),    new vec3d(0, 1, 1),    new vec3d(0, 1, 0)),
+		new triangle(new vec3d(0, 0, 1),    new vec3d(0, 1, 0),    new vec3d(0, 0, 0)),
+
+		// // TOP                                                       
+		new triangle(new vec3d(0, 1, 0),    new vec3d(0, 1, 1),    new vec3d(1, 1, 1)),
+		new triangle(new vec3d(0, 1, 0),    new vec3d(1, 1, 1),    new vec3d(1, 1, 0)),
+
+		// // BOTTOM                                                    
+		new triangle(new vec3d(1, 0, 1),    new vec3d(0, 0, 1),    new vec3d(0, 0, 0)),
+		new triangle(new vec3d(1, 0, 1),    new vec3d(0, 0, 0),    new vec3d(1, 0, 0)),
+    ]);
+
+    // Angle of 3D Cube
+    let fTheta = 0;
+
+    // Screen Dimensions
+    let ScreenHeight = 480;
+    let ScreenWidth = 816;
+
+    // Projection Matrix, for converting 3D coordinates of triangles to 2D perspective coordinates
+    let matProj = new mat4x4()
+    let fNear = 0.1;
+    let fFar = 1000.0;
+    let fFov = 90.0;
+    let fAspectRatio = ScreenHeight / ScreenWidth;
+    let fFovRad = 1.0 / Math.tan(fFov * 0.5 / 180.0 * 3.14159);
+
+    matProj.m[0][0] = fAspectRatio * fFovRad;
+    matProj.m[1][1] = fFovRad;
+    matProj.m[2][2] = fFar / (fFar - fNear);
+    matProj.m[3][2] = (-fFar * fNear) / (fFar - fNear);
+    matProj.m[2][3] = 1.0;
+    matProj.m[3][3] = 0.0;
+
+    /* On each frame we need to do 3 things: 
+        (1) Clear the screen from the previous frame
+        (2) Transform the cube mesh in 3D space (update the coordinates of each triangle's vertices)
+        (3) Project each triangle from 3D space on to 2D screen
+    */
+    function onNewFrame(fElapsedTime) {
+
+        // Clear screen
+        let screen = document.getElementById("screen");
+        screen.innerHTML = "";
+        while(screen.firstchild) {
+            screen.removeChild(screen.firstChild);
+        }
+
+        // Set up rotation matrices
+        fTheta += 1.0 * fElapsedTime;
+        let matRotZ = new mat4x4();
+        let matRotX = new mat4x4();
+
+        // Z Rotation Matrix
+        matRotZ.m[0][0] = Math.cos(fTheta);
+        matRotZ.m[0][1] = Math.sin(fTheta);
+        matRotZ.m[1][0] = -Math.sin(fTheta);
+        matRotZ.m[1][1] = Math.cos(fTheta);
+        matRotZ.m[2][2] = 1;
+        matRotZ.m[3][3] = 1;
+
+        // X Rotation Matirx
+        matRotX.m[0][0] = 1;
+		matRotX.m[1][1] = Math.cos(fTheta * 0.5);
+		matRotX.m[1][2] = Math.sin(fTheta * 0.5);
+		matRotX.m[2][1] = -Math.sin(fTheta * 0.5);
+		matRotX.m[2][2] = Math.cos(fTheta * 0.5);
+		matRotX.m[3][3] = 1;
+
+        // Transform triangles in 3D space, project them to 2D and draw them on screen
+        meshCube.tris.forEach(function(tri) {
+            
+            // Transform triangle in 3D space
+            let triTransformed = new triangle(new vec3d(0, 0, 0), new vec3d(0, 0, 0), new vec3d(0, 0, 0));
+            tri.p.forEach((vertex, i) => {
+                
+                // Rotate in Z-Axis  
+                let z_rotated_point = MultiplyMatrixVector(matRotZ, tri.p[i]);    
+                
+                // Rotate in X-Axis
+                let zx_rotated_point = MultiplyMatrixVector(matRotX, z_rotated_point);     
+                
+                // Translate triangles    
+                triTransformed.p[i] = zx_rotated_point;
+                triTransformed.p[i].z = zx_rotated_point.z + 3.0;                        
+            })
+            
+            // Project triangles from 3D --> 2D
+            let triProjected = new triangle(new vec3d(0, 0, 0), new vec3d(0, 0, 0), new vec3d(0, 0, 0));
+            tri.p.forEach((vertex, i) => {
+
+                // Apply projection matrix
+                triProjected.p[i] = MultiplyMatrixVector(matProj, triTransformed.p[i]);
+
+                // Perspective correction with w coordinate
+                let w = triProjected.p[i].w;
+                if (w != 0) {
+                    triProjected.p[i].x /= w; triProjected.p[i].y /= w; triProjected.p[i].z /= w;
+                }
+            })
+
+            // Scale into view
+            triProjected.p.forEach((vertex, i) => {
+
+                // Shift 2D coordinates down and to the right
+                triProjected.p[i].x += 1.0; triProjected.p[i].y += 1.0; 
+
+                // Scale 2D coordinates relative to screen size
+                triProjected.p[i].x *= 0.5 * ScreenWidth;
+			    triProjected.p[i].y *= 0.5 * ScreenHeight;
+            })
+
+            // Rasterize triangle
+            DrawTriangle(triProjected.p[0].x, triProjected.p[0].y,
+                triProjected.p[1].x, triProjected.p[1].y,
+                triProjected.p[2].x, triProjected.p[2].y
+            )
+        })
+    }
+
+    document.addEventListener("DOMContentLoaded", function(event) {
+        let FPS = 60;
+        let interval = 1 / FPS;
+        setInterval(function() {
+            onNewFrame(interval);
+        }, interval * 1000)
+    });
+</script>
