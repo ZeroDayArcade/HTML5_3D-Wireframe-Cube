@@ -1,6 +1,6 @@
 # 3D Wireframe Cube - JavaScript Software Rendering
 
-A software rendered 3D Wireframe Cube demo for HTML5. No 3D libraries and no HTML Canvas are used. The the 3D transformations and 3D&rarr;2D calculations are done in the JavaScript code.
+A software rendered 3D Wireframe Cube demo for HTML5. No 3D libraries and no HTML Canvas are used. The 3D transformations and 3D&rarr;2D calculations are done in the JavaScript code.
 
 <br/>
 <p align="center">
